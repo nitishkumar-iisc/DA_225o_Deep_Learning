@@ -51,7 +51,7 @@ Role is stored as a Firebase Auth custom claim (`role: "candidate" | "recruiter"
 - Register with name, company, email, password; role set to `recruiter`.
 - Login redirects to `/recruiter/dashboard`.
 
-### 4.2 Job Posting Management
+### 4.2 Job Posting Managements
 
 #### Create Job
 Fields:
