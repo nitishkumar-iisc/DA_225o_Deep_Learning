@@ -33,9 +33,10 @@ export async function GET(request: NextRequest) {
     const jobsSnap = await adminDb
       .collection("jobs")
       .where("recruiterId", "==", auth.uid)
-      .where("status", "!=", "deleted")
       .get();
-    jobIds = jobsSnap.docs.map((d) => d.id);
+    jobIds = jobsSnap.docs
+      .filter((d) => (d.data() as Job).status !== "deleted")
+      .map((d) => d.id);
   }
 
   if (jobIds.length === 0) {

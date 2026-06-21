@@ -33,8 +33,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ uid: userRecord.uid, role }, { status: 201 });
   } catch (error: unknown) {
-    const message =
-      error instanceof Error ? error.message : "Registration failed";
+    const code = (error as { code?: string }).code;
+    if (code === "auth/email-already-exists") {
+      return NextResponse.json({ error: "Email already in use" }, { status: 409 });
+    }
+    const message = error instanceof Error ? error.message : "Registration failed";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

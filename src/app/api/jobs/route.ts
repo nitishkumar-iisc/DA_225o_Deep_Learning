@@ -67,11 +67,12 @@ export async function GET(request: NextRequest) {
   const snapshot = await adminDb
     .collection("jobs")
     .where("recruiterId", "==", auth.uid)
-    .where("status", "!=", "deleted")
-    .orderBy("createdAt", "desc")
     .get();
 
-  const jobs: Job[] = snapshot.docs.map((doc) => doc.data() as Job);
+  const jobs: Job[] = snapshot.docs
+    .map((doc) => doc.data() as Job)
+    .filter((j) => j.status !== "deleted")
+    .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
   return NextResponse.json({ jobs });
 }
 
@@ -87,7 +88,6 @@ export async function POST(request: NextRequest) {
 
   if (
     !title ||
-    !department ||
     !description ||
     !requiredSkills ||
     requiredExperienceYears === undefined ||
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
   const counterRef = adminDb.collection("counters").doc(counterId);
   const jobRef = adminDb.collection("jobs").doc();
 
-  await adminDb.runTransaction(async (tx) => {
+  try { await adminDb.runTransaction(async (tx) => {
     const counterSnap = await tx.get(counterRef);
     const seq: number = counterSnap.exists ? (counterSnap.data()!.seq as number) + 1 : 1;
     tx.set(counterRef, { seq }, { merge: true });
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
       id: jobRef.id,
       positionId: `BH-${year}-${String(seq).padStart(4, "0")}`,
       title,
-      department,
+      department: department ?? null,
       description,
       requiredSkills: requiredSkills as string[],
       requiredExperienceYears: Number(requiredExperienceYears),
@@ -122,7 +122,10 @@ export async function POST(request: NextRequest) {
       updatedAt: now,
     };
     tx.set(jobRef, job);
-  });
+  }); } catch (err) {
+    console.error("POST /api/jobs transaction error:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
 
   const jobSnap = await jobRef.get();
   const job = jobSnap.data() as Job;
