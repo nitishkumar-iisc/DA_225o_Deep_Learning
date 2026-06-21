@@ -3,13 +3,13 @@ import { adminDb } from "@/lib/firebase-admin";
 import { predict, defaultWeights } from "@/lib/ml-model";
 import { MLModel } from "@/types";
 
-// GET /api/ml/predict — utility endpoint; returns predicted probability for a feature vector
-// Query params: jobId (optional), features (comma-separated list of 5 numbers)
-// If jobId is provided, loads trained weights from Firestore; otherwise uses defaults.
+// GET /api/ml/predict
+// Query params: recruiterId (optional), features (comma-separated list of 5 numbers)
+// If recruiterId is provided, loads the org-level model weights; otherwise uses defaults.
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const featuresParam = searchParams.get("features");
-  const jobId = searchParams.get("jobId");
+  const recruiterId = searchParams.get("recruiterId");
 
   if (!featuresParam) {
     return NextResponse.json(
@@ -26,12 +26,11 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Load model weights from Firestore or fall back to defaults
   let weights: number[];
   let bias: number;
 
-  if (jobId) {
-    const modelSnap = await adminDb.collection("mlModels").doc(jobId).get();
+  if (recruiterId) {
+    const modelSnap = await adminDb.collection("mlModels").doc(recruiterId).get();
     if (modelSnap.exists) {
       const model = modelSnap.data() as MLModel;
       weights = model.weights;

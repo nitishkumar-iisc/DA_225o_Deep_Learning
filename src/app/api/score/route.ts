@@ -139,11 +139,11 @@ export async function POST(request: NextRequest) {
     featureVector.claudeRawScore,
   ];
 
-  // Step 4: Load ML weights or fall back to defaults (SPEC §5.3)
+  // Step 4: Load org-level ML weights (keyed by recruiterId) or fall back to defaults
   let weights: number[];
   let bias: number;
 
-  const modelSnap = await adminDb.collection("mlModels").doc(jobId).get();
+  const modelSnap = await adminDb.collection("mlModels").doc(job.recruiterId).get();
   if (modelSnap.exists) {
     const model = modelSnap.data() as MLModel;
     weights = model.weights;

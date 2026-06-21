@@ -99,11 +99,11 @@ export async function PATCH(
   const authHeader = request.headers.get("Authorization") ?? "";
   const cookieHeader = request.headers.get("cookie") ?? "";
 
-  // Trigger ML retraining in the background (SPEC §4.3)
+  // Trigger org-level ML retraining — model trains on all decisions across all recruiter jobs
   fetch(`${origin}/api/ml/train`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: authHeader },
-    body: JSON.stringify({ jobId: application.jobId }),
+    body: JSON.stringify({ recruiterId: auth.uid }),
   }).catch(() => {});
 
   // Trigger calendar scheduling for approved candidates (SPEC §4.3, §8.2)

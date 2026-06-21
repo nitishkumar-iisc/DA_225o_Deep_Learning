@@ -1,54 +1,62 @@
 import { NextRequest, NextResponse } from "next/server";
-import { after } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
-import { train, defaultWeights } from "@/lib/ml-model";
-import { Application, MLModel } from "@/types";
+import { train } from "@/lib/ml-model";
+import { Application, Job, MLModel } from "@/types";
 
 const MIN_EXAMPLES = 5;
 
-function getBaseUrl(request: NextRequest): string {
-  const proto = request.headers.get("x-forwarded-proto") ?? "http";
-  const host = request.headers.get("host") ?? "localhost:3000";
-  return `${proto}://${host}`;
-}
-
-// POST /api/ml/train — internal endpoint; called after recruiter decision (SPEC §7.2)
-// Body: { jobId: string }
+// POST /api/ml/train — internal endpoint; called after recruiter decision.
+// Trains ONE org-level model per recruiter using ALL decisions across ALL their jobs.
+// Body: { recruiterId: string }
 export async function POST(request: NextRequest) {
-  let body: { jobId?: string };
+  let body: { recruiterId?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { jobId } = body;
-  if (!jobId) {
-    return NextResponse.json({ error: "jobId is required" }, { status: 400 });
+  const { recruiterId } = body;
+  if (!recruiterId) {
+    return NextResponse.json({ error: "recruiterId is required" }, { status: 400 });
   }
 
-  // Load all decided applications for this job (Admin SDK)
-  const decidedSnap = await adminDb
-    .collection("applications")
-    .where("jobId", "==", jobId)
-    .where("decision", "!=", null)
+  // All jobs for this recruiter
+  const jobsSnap = await adminDb
+    .collection("jobs")
+    .where("recruiterId", "==", recruiterId)
     .get();
 
-  const decidedApps = decidedSnap.docs.map((d) => d.data() as Application);
+  const jobIds = jobsSnap.docs.map((d) => (d.data() as Job).id);
 
-  // Minimum 5 labelled examples required before training (SPEC §7.2)
+  if (jobIds.length === 0) {
+    return NextResponse.json({ skipped: true, reason: "No jobs found for recruiter", sampleCount: 0 });
+  }
+
+  // Collect all decided applications across every job (Firestore `in` supports up to 30 items)
+  const CHUNK = 30;
+  let decidedApps: Application[] = [];
+  for (let i = 0; i < jobIds.length; i += CHUNK) {
+    const chunk = jobIds.slice(i, i + CHUNK);
+    const snap = await adminDb
+      .collection("applications")
+      .where("jobId", "in", chunk)
+      .where("decision", "!=", null)
+      .get();
+    decidedApps = decidedApps.concat(snap.docs.map((d) => d.data() as Application));
+  }
+
   if (decidedApps.length < MIN_EXAMPLES) {
     return NextResponse.json(
       {
         skipped: true,
-        reason: `Need at least ${MIN_EXAMPLES} decisions; have ${decidedApps.length}`,
+        reason: `Need at least ${MIN_EXAMPLES} decisions across all roles; have ${decidedApps.length}`,
         sampleCount: decidedApps.length,
       },
       { status: 200 }
     );
   }
 
-  // Map labels: approved → 1, rejected → 0 (SPEC §7.2)
   const trainingExamples = decidedApps.map((app) => ({
     features: [
       app.featureVector.keywordMatchScore,
@@ -61,12 +69,11 @@ export async function POST(request: NextRequest) {
   }));
 
   const { weights, bias } = train(trainingExamples);
-
   const approvedCount = decidedApps.filter((a) => a.decision === "approved").length;
   const positiveRate = approvedCount / decidedApps.length;
 
   const modelPayload: MLModel = {
-    jobId,
+    recruiterId,
     weights,
     bias,
     trainedAt: new Date().toISOString(),
@@ -74,43 +81,11 @@ export async function POST(request: NextRequest) {
     positiveRate,
   };
 
-  // Persist trained model to Firestore (SPEC §7.3)
-  await adminDb.collection("mlModels").doc(jobId).set(modelPayload);
-
-  // Fan-out: re-score all pending applications for this job (fire-and-forget, SPEC §5.1)
-  const baseUrl = getBaseUrl(request);
-
-  after(async () => {
-    const pendingSnap = await adminDb
-      .collection("applications")
-      .where("jobId", "==", jobId)
-      .where("status", "==", "pending")
-      .get();
-
-    await Promise.allSettled(
-      pendingSnap.docs.map((doc) => {
-        const app = doc.data() as Application;
-        return fetch(`${baseUrl}/api/score`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            resumeId: app.resumeId,
-            jobId: app.jobId,
-            appId: app.id,
-          }),
-        });
-      })
-    );
-  });
+  // One model doc per recruiter (org-level, keyed by recruiterId)
+  await adminDb.collection("mlModels").doc(recruiterId).set(modelPayload);
 
   return NextResponse.json(
-    {
-      trained: true,
-      sampleCount: decidedApps.length,
-      positiveRate,
-      weights,
-      bias,
-    },
+    { trained: true, sampleCount: decidedApps.length, positiveRate, weights, bias },
     { status: 200 }
   );
 }

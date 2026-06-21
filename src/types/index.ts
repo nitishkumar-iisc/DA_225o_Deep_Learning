@@ -101,7 +101,7 @@ export interface Application {
 }
 
 export interface MLModel {
-  jobId: string;
+  recruiterId: string;            // org-level: one model per recruiter, trained on all their decisions
   weights: number[];              // one per feature, length 5
   bias: number;
   trainedAt: string;

@@ -410,7 +410,7 @@ if (!carolJob1Snap.empty) {
 console.log("\n--- Creating ML model ---");
 
 const mlModel: MLModel = {
-  jobId: jobRefs[0].id,
+  recruiterId: r1Uid,
   weights: [0.25, 0.22, 0.18, 0.20, 0.30],  // slightly adjusted from defaults after 2 decisions
   bias: 0.05,
   trainedAt: NOW,
@@ -418,8 +418,8 @@ const mlModel: MLModel = {
   positiveRate: 0.5,
 };
 
-await db.collection("mlModels").doc(jobRefs[0].id).set(mlModel);
-console.log(`  [mlModel] job=${jobRefs[0].positionId} weights=${JSON.stringify(mlModel.weights)}`);
+await db.collection("mlModels").doc(r1Uid).set(mlModel);
+console.log(`  [mlModel] recruiter=${r1Uid} weights=${JSON.stringify(mlModel.weights)}`);
 
 // ── Done ──────────────────────────────────────────────────────────────────────
 
