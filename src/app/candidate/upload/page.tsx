@@ -35,34 +35,24 @@ export default function CandidateUpload() {
   async function upload() {
     if (!file) return;
     setStatus("uploading");
-    setProgress(10);
+    setProgress(20);
     setError("");
 
     try {
       const token = (await user?.getIdToken()) || "";
 
-      // Send file directly to our API — server uploads to Firebase Storage (avoids CORS)
       const formData = new FormData();
       formData.append("file", file);
 
+      // Single call: server parses the PDF in-memory and returns parsedData directly
+      setStatus("parsing");
       const res = await fetch("/api/resumes/upload", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-      if (!res.ok) throw new Error(await readError(res, "Upload failed"));
-      const { resumeId, storagePath } = await res.json();
-
-      setStatus("parsing");
-      setProgress(50);
-
-      const parseRes = await fetch("/api/resumes/parse", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ resumeId, storageUrl: storagePath }),
-      });
-      if (!parseRes.ok) throw new Error(await readError(parseRes, "Parsing failed"));
-      const { parsedData: data } = await parseRes.json();
+      if (!res.ok) throw new Error(await readError(res, "Upload & parse failed"));
+      const { parsedData: data } = await res.json();
 
       setProgress(100);
       setParsedData(data);
