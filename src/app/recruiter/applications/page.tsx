@@ -1,17 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { ApplicationTable } from "@/components/application-table";
 import { Application, Job } from "@/types";
 
+type ApplicationRow = { application: Application & { candidateName: string }; candidateName: string; job: Job };
 type StatusFilter = "all" | Application["status"];
-
-interface ApplicationRow {
-  application: Application;
-  candidateName: string;
-  job: Job;
-}
 
 function TableSkeleton() {
   return (
@@ -30,46 +26,54 @@ function TableSkeleton() {
 }
 
 export default function RecruiterApplications() {
-  const { user } = useAuth();
-  const [rows, setRows] = useState<ApplicationRow[]>([]);
+  const { user, role, loading: authLoading } = useAuth();
+  const router = useRouter();
+
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [allRows, setAllRows] = useState<ApplicationRow[]>([]);
+  const [fetching, setFetching] = useState(true);
+
   const [jobFilter, setJobFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [minScore, setMinScore] = useState(0);
   const [maxScore, setMaxScore] = useState(100);
 
   useEffect(() => {
+    if (!authLoading && (!user || role !== "recruiter")) router.push("/login");
+  }, [user, role, authLoading, router]);
+
+  useEffect(() => {
     if (!user) return;
 
-    async function load() {
-      try {
-        const token = await user!.getIdToken();
-        const headers = { Authorization: `Bearer ${token}` };
+    user.getIdToken().then(async (token) => {
+      const headers = { Authorization: `Bearer ${token}` };
 
-        const [appsRes, jobsRes] = await Promise.all([
-          fetch("/api/applications", { headers }),
-          fetch("/api/jobs", { headers }),
-        ]);
+      const [jobsRes, appsRes] = await Promise.all([
+        fetch("/api/jobs", { headers }),
+        fetch("/api/applications", { headers }),
+      ]);
 
-        if (jobsRes.ok) {
-          const { jobs: recruiterJobs } = await jobsRes.json() as { jobs: Job[] };
-          setJobs(recruiterJobs ?? []);
-        }
+      const { jobs: jobList } = await jobsRes.json();
+      const { applications } = await appsRes.json();
 
-        if (appsRes.ok) {
-          const data = await appsRes.json() as ApplicationRow[];
-          setRows(data ?? []);
-        }
-      } finally {
-        setLoading(false);
-      }
-    }
+      setJobs(jobList ?? []);
 
-    load();
+      const jobMap: Record<string, Job> = {};
+      for (const j of (jobList ?? [])) jobMap[j.id] = j;
+
+      const rows: ApplicationRow[] = (applications ?? [])
+        .filter((a: Application & { candidateName: string }) => jobMap[a.jobId])
+        .map((a: Application & { candidateName: string }) => ({
+          application: a,
+          candidateName: a.candidateName ?? "Unknown",
+          job: jobMap[a.jobId],
+        }));
+
+      setAllRows(rows);
+    }).catch(() => {}).finally(() => setFetching(false));
   }, [user]);
 
-  const filtered = rows
+  const filtered = allRows
     .filter(({ application, job }) => {
       if (jobFilter !== "all" && job.id !== jobFilter) return false;
       if (statusFilter !== "all" && application.status !== statusFilter) return false;
@@ -149,7 +153,7 @@ export default function RecruiterApplications() {
       </div>
 
       <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
-        {loading ? (
+        {fetching ? (
           <>
             <div className="px-4 py-3 border-b bg-gray-50">
               <div className="h-3 bg-gray-200 rounded w-20 animate-pulse" />

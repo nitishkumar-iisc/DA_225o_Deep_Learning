@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { verifyAuth } from "@/lib/auth-helpers";
-import { Application, Job, User } from "@/types";
+import { Application, Job, Resume, User } from "@/types";
 
 // GET /api/applications/[id]
 // Accessible by the recruiter who owns the job, or the candidate who submitted the application.
@@ -34,18 +34,21 @@ export async function GET(
     }
   }
 
-  // Join candidate name and job details
-  const [candidateSnap, jobSnap] = await Promise.all([
+  // Join candidate, job, and resume in parallel
+  const [candidateSnap, jobSnap, resumeSnap] = await Promise.all([
     adminDb.collection("users").doc(application.candidateId).get(),
     adminDb.collection("jobs").doc(application.jobId).get(),
+    adminDb.collection("resumes").doc(application.resumeId).get(),
   ]);
 
   const candidate = candidateSnap.exists ? (candidateSnap.data() as User) : null;
   const job = jobSnap.exists ? (jobSnap.data() as Job) : null;
+  const resumeUrl = resumeSnap.exists ? (resumeSnap.data() as Resume).storageUrl : null;
 
   return NextResponse.json({
     application,
     candidate: candidate ? { name: candidate.name, email: candidate.email } : null,
     job: job ? { title: job.title, positionId: job.positionId, department: job.department } : null,
+    resumeUrl,
   });
 }

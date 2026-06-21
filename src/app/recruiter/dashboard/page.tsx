@@ -5,29 +5,32 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Briefcase, Users, Clock, Plus } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
-import { Job } from "@/types";
+import { Application, Job } from "@/types";
 
 export default function RecruiterDashboard() {
   const { user, role, loading } = useAuth();
   const router = useRouter();
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [applications, setApplications] = useState<Application[]>([]);
   const [fetching, setFetching] = useState(true);
 
   useEffect(() => {
-    if (!loading && (!user || role !== "recruiter")) {
-      router.push("/login");
-    }
+    if (!loading && (!user || role !== "recruiter")) router.push("/login");
   }, [user, role, loading, router]);
 
   useEffect(() => {
     if (!user) return;
-    user.getIdToken().then((token) =>
-      fetch("/api/jobs", { headers: { Authorization: `Bearer ${token}` } })
-        .then((r) => r.json())
-        .then(({ jobs }) => setJobs(jobs ?? []))
-        .catch(() => {})
-        .finally(() => setFetching(false))
-    );
+    user.getIdToken().then(async (token) => {
+      const headers = { Authorization: `Bearer ${token}` };
+      const [jobsRes, appsRes] = await Promise.all([
+        fetch("/api/jobs", { headers }),
+        fetch("/api/applications", { headers }),
+      ]);
+      const { jobs: jobList } = await jobsRes.json();
+      const { applications: appList } = await appsRes.json();
+      setJobs(jobList ?? []);
+      setApplications(appList ?? []);
+    }).catch(() => {}).finally(() => setFetching(false));
   }, [user]);
 
   if (loading || fetching) {
@@ -41,6 +44,7 @@ export default function RecruiterDashboard() {
   }
 
   const openJobs = jobs.filter((j) => j.status === "open");
+  const pendingCount = applications.filter((a) => a.status === "pending").length;
 
   const stats = [
     {
@@ -52,17 +56,17 @@ export default function RecruiterDashboard() {
     },
     {
       label: "Total Applications",
-      value: "—",
+      value: applications.length,
       icon: Users,
       color: "bg-green-50 text-green-700",
       href: "/recruiter/applications",
     },
     {
       label: "Pending Review",
-      value: "—",
+      value: pendingCount,
       icon: Clock,
       color: "bg-amber-50 text-amber-700",
-      href: "/recruiter/applications",
+      href: "/recruiter/applications?status=pending",
     },
   ];
 
@@ -119,31 +123,34 @@ export default function RecruiterDashboard() {
           </div>
         ) : (
           <div className="space-y-3">
-            {openJobs.slice(0, 5).map((job) => (
-              <div
-                key={job.id}
-                className="bg-white border rounded-xl p-4 flex items-center justify-between shadow-sm"
-              >
-                <div>
-                  <p className="font-medium text-gray-900">{job.title}</p>
-                  <p className="text-sm text-gray-400">
-                    {job.positionId}
-                    {job.department ? ` · ${job.department}` : ""}
-                  </p>
+            {openJobs.slice(0, 5).map((job) => {
+              const jobAppCount = applications.filter((a) => a.jobId === job.id).length;
+              return (
+                <div
+                  key={job.id}
+                  className="bg-white border rounded-xl p-4 flex items-center justify-between shadow-sm"
+                >
+                  <div>
+                    <p className="font-medium text-gray-900">{job.title}</p>
+                    <p className="text-sm text-gray-400">
+                      {job.positionId}{job.department ? ` · ${job.department}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-400">{jobAppCount} applicant{jobAppCount !== 1 ? "s" : ""}</span>
+                    <span className="text-xs bg-green-100 text-green-700 font-medium px-2 py-0.5 rounded-full">
+                      Open
+                    </span>
+                    <Link
+                      href={`/recruiter/jobs/${job.id}/edit`}
+                      className="text-sm text-blue-600 hover:underline"
+                    >
+                      Edit
+                    </Link>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs bg-green-100 text-green-700 font-medium px-2 py-0.5 rounded-full">
-                    Open
-                  </span>
-                  <Link
-                    href={`/recruiter/jobs/${job.id}/edit`}
-                    className="text-sm text-blue-600 hover:underline"
-                  >
-                    Edit
-                  </Link>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
