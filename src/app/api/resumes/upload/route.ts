@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
 import { adminDb, getAdminStorage } from "@/lib/firebase-admin";
 import { verifyAuth } from "@/lib/auth-helpers";
-import { parseResume } from "@/lib/anthropic";
+import { parseResumeFromPDF } from "@/lib/anthropic";
 import { Application, Job } from "@/types";
 
 const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -35,27 +35,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "File must be ≤ 5 MB" }, { status: 413 });
     }
 
-    // Read file buffer once — reuse for both pdf-parse and Storage upload
+    // Read file buffer — reused for Claude parsing and background Storage save
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    // Extract text from PDF.
-    // With serverExternalPackages Turbopack may wrap the CJS module as { default: fn },
-    // so we normalise both shapes.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfMod = require("pdf-parse");
-    const pdfParse = (typeof pdfMod === "function" ? pdfMod : pdfMod.default) as (
-      b: Buffer
-    ) => Promise<{ text: string }>;
-    const pdfData = await pdfParse(buffer);
-
-    if (!pdfData.text.trim()) {
-      return NextResponse.json({ error: "Could not extract text from PDF" }, { status: 422 });
-    }
-
-    // Parse with Claude
+    // Parse with Claude directly from the PDF buffer (no PDF library needed)
     let parsedData;
     try {
-      parsedData = await parseResume(pdfData.text);
+      parsedData = await parseResumeFromPDF(buffer);
     } catch (err) {
       console.error("[resumes/upload] Claude parse failed:", err);
       return NextResponse.json({ error: "Resume parsing failed" }, { status: 502 });

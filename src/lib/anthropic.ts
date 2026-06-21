@@ -18,17 +18,7 @@ export interface ClaudeScoreResult {
   reasoning: string;
 }
 
-// Resume parsing prompt — returns structured candidate data (SPEC §6.1)
-export async function parseResume(text: string): Promise<ParsedResume> {
-  const client = getClient();
-
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 1024,
-    messages: [
-      {
-        role: "user",
-        content: `Extract structured data from this resume text. Return ONLY valid JSON with this exact schema:
+const RESUME_PARSE_PROMPT = `Extract structured data from this resume. Return ONLY valid JSON with this exact schema:
 {
   "name": "string or null",
   "email": "string or null",
@@ -44,21 +34,9 @@ Rules:
 - Infer experienceYears from work history if not explicitly stated.
 - Return null for any field you cannot determine.
 - educationLevel must be one of: none, bachelor, master, phd.
-- summary should be a concise professional summary.
+- summary should be a concise professional summary.`;
 
-Resume text:
-${text}`,
-      },
-    ],
-  });
-
-  const content = response.content[0];
-  if (content.type !== "text") throw new Error("Unexpected response type from Claude");
-
-  const json = content.text.replace(/```json\n?|```\n?/g, "").trim();
-  const parsed: ParsedResume = JSON.parse(json);
-
-  // Normalize and validate all fields defensively
+function normalizeResume(parsed: ParsedResume): ParsedResume {
   return {
     name: parsed.name ?? null,
     email: parsed.email ?? null,
@@ -71,6 +49,60 @@ ${text}`,
     workHistory: Array.isArray(parsed.workHistory) ? parsed.workHistory : [],
     summary: parsed.summary ?? "",
   };
+}
+
+// Parse a resume PDF buffer directly — no PDF parsing library needed.
+// Claude reads the PDF natively via the document content type.
+export async function parseResumeFromPDF(buffer: Buffer): Promise<ParsedResume> {
+  const client = getClient();
+
+  // The document block type isn't in all SDK overloads' union, so we cast the array.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const content: any[] = [
+    {
+      type: "document",
+      source: {
+        type: "base64",
+        media_type: "application/pdf",
+        data: buffer.toString("base64"),
+      },
+    },
+    { type: "text", text: RESUME_PARSE_PROMPT },
+  ];
+
+  const response = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 1024,
+    messages: [{ role: "user", content }],
+  });
+
+  const first = response.content[0];
+  if (first.type !== "text") throw new Error("Unexpected response type from Claude");
+
+  const json = first.text.replace(/```json\n?|```\n?/g, "").trim();
+  return normalizeResume(JSON.parse(json));
+}
+
+// Parse a resume from extracted plain text (used when text is already available).
+export async function parseResume(text: string): Promise<ParsedResume> {
+  const client = getClient();
+
+  const response = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 1024,
+    messages: [
+      {
+        role: "user",
+        content: `${RESUME_PARSE_PROMPT}\n\nResume text:\n${text}`,
+      },
+    ],
+  });
+
+  const content = response.content[0];
+  if (content.type !== "text") throw new Error("Unexpected response type from Claude");
+
+  const json = content.text.replace(/```json\n?|```\n?/g, "").trim();
+  return normalizeResume(JSON.parse(json));
 }
 
 // Fit scoring prompt — evaluates candidate against job requirements (SPEC §6.2)
