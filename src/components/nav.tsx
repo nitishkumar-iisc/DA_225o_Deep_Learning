@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/components/auth-provider";
-import { Briefcase, LayoutDashboard, FolderOpen, Users, Settings, LogOut, Upload } from "lucide-react";
+import { Briefcase, LayoutDashboard, FolderOpen, Users, Settings, LogOut, Upload, Brain } from "lucide-react";
 
 export function Nav() {
   const { user, role } = useAuth();
@@ -24,6 +24,7 @@ export function Nav() {
     { href: "/recruiter/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/recruiter/jobs", label: "Jobs", icon: FolderOpen },
     { href: "/recruiter/applications", label: "Applications", icon: Users },
+    { href: "/recruiter/ml", label: "ML Model", icon: Brain },
     { href: "/recruiter/settings", label: "Settings", icon: Settings },
   ];
 
