@@ -19,10 +19,10 @@ export const auth: Auth = getAuth(app);
 export const db: Firestore = getFirestore(app);
 export const storage: FirebaseStorage = getStorage(app);
 
-// Connect to local emulators when running in development
+// Connect to local emulators only when explicitly opted in via env var
 if (
   typeof window !== "undefined" &&
-  process.env.NODE_ENV === "development" &&
+  process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true" &&
   !(auth as unknown as { _isEmulator?: boolean })._isEmulator
 ) {
   connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
