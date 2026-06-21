@@ -39,9 +39,11 @@ export async function POST(request: NextRequest) {
     const file = bucket.file(storageUrl);
     const [buffer] = await file.download();
 
-    // Extract text — pdf-parse is CJS; require() avoids dynamic import interop issues
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require("pdf-parse") as (b: Buffer) => Promise<{ text: string }>;
+    const pdfMod = require("pdf-parse");
+    const pdfParse = (typeof pdfMod === "function" ? pdfMod : pdfMod.default) as (
+      b: Buffer
+    ) => Promise<{ text: string }>;
     const pdfData = await pdfParse(buffer);
 
     if (!pdfData.text.trim()) {

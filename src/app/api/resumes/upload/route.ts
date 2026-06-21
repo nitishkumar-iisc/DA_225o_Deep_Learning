@@ -38,9 +38,14 @@ export async function POST(request: NextRequest) {
     // Read file buffer once — reuse for both pdf-parse and Storage upload
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    // Extract text from PDF — pdf-parse is CJS; require() is more reliable than dynamic import interop
+    // Extract text from PDF.
+    // With serverExternalPackages Turbopack may wrap the CJS module as { default: fn },
+    // so we normalise both shapes.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require("pdf-parse") as (b: Buffer) => Promise<{ text: string }>;
+    const pdfMod = require("pdf-parse");
+    const pdfParse = (typeof pdfMod === "function" ? pdfMod : pdfMod.default) as (
+      b: Buffer
+    ) => Promise<{ text: string }>;
     const pdfData = await pdfParse(buffer);
 
     if (!pdfData.text.trim()) {
