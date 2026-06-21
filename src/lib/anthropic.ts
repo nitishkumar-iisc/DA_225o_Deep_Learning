@@ -22,43 +22,59 @@ export interface ClaudeScoreResult {
 export async function parseResume(text: string): Promise<ParsedResume> {
   const client = getClient();
 
-  const message = await client.messages.create({
+  const response = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 1024,
     messages: [
       {
         role: "user",
-        content: `Extract structured information from this resume text. Return ONLY valid JSON matching the schema below. If a field cannot be determined, use null for strings and 0 for numbers.
-
-Resume text:
-${text}
-
-Required JSON schema:
+        content: `Extract structured data from this resume text. Return ONLY valid JSON with this exact schema:
 {
   "name": "string or null",
   "email": "string or null",
   "phone": "string or null",
   "skills": ["string"],
   "experienceYears": number,
-  "educationLevel": "none | bachelor | master | phd",
-  "workHistory": [{ "title": "string", "company": "string", "years": number }],
-  "summary": "string (≤200 words)"
+  "educationLevel": "none" | "bachelor" | "master" | "phd",
+  "workHistory": [{"title": "string", "company": "string", "years": number}],
+  "summary": "string (max 200 words)"
 }
 
-Infer experienceYears from work history if not stated. Return only the JSON object, no other text.`,
+Rules:
+- Infer experienceYears from work history if not explicitly stated.
+- Return null for any field you cannot determine.
+- educationLevel must be one of: none, bachelor, master, phd.
+- summary should be a concise professional summary.
+
+Resume text:
+${text}`,
       },
     ],
   });
 
-  const content = message.content[0];
+  const content = response.content[0];
   if (content.type !== "text") throw new Error("Unexpected response type from Claude");
 
-  const jsonText = content.text.trim().replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-  return JSON.parse(jsonText) as ParsedResume;
+  const json = content.text.replace(/```json\n?|```\n?/g, "").trim();
+  const parsed: ParsedResume = JSON.parse(json);
+
+  // Normalize and validate all fields defensively
+  return {
+    name: parsed.name ?? null,
+    email: parsed.email ?? null,
+    phone: parsed.phone ?? null,
+    skills: Array.isArray(parsed.skills) ? parsed.skills : [],
+    experienceYears: Number(parsed.experienceYears) || 0,
+    educationLevel: ["none", "bachelor", "master", "phd"].includes(parsed.educationLevel)
+      ? parsed.educationLevel
+      : "none",
+    workHistory: Array.isArray(parsed.workHistory) ? parsed.workHistory : [],
+    summary: parsed.summary ?? "",
+  };
 }
 
 // Fit scoring prompt — evaluates candidate against job requirements (SPEC §6.2)
-// Generic rubric evaluation so it works across different job types.
+// Generic rubric so it works across different job types.
 // Claude MUST return exactly this JSON schema (no extra fields).
 export async function scoreJobFit(
   resumeSummary: {
@@ -114,7 +130,7 @@ Return ONLY valid JSON matching this exact schema (no extra fields, no markdown)
   const content = message.content[0];
   if (content.type !== "text") throw new Error("Unexpected response type from Claude");
 
-  const jsonText = content.text.trim().replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+  const jsonText = content.text.replace(/```json\n?|```\n?/g, "").trim();
   const result = JSON.parse(jsonText) as ClaudeScoreResult;
 
   // Clamp scores to [0, 1]
