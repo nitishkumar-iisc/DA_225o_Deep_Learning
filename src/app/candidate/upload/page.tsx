@@ -23,6 +23,15 @@ export default function CandidateUpload() {
     setError("");
   }
 
+  async function readError(res: Response, fallback: string): Promise<string> {
+    try {
+      const body = await res.json();
+      return body.error || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
   async function upload() {
     if (!file) return;
     setStatus("uploading");
@@ -37,7 +46,7 @@ export default function CandidateUpload() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ fileName: file.name, contentType: file.type, fileSize: file.size }),
       });
-      if (!res.ok) throw new Error((await res.json()).error || "Upload request failed");
+      if (!res.ok) throw new Error(await readError(res, "Upload request failed"));
       const { uploadUrl, resumeId, storagePath } = await res.json();
 
       await new Promise<void>((resolve, reject) => {
@@ -59,7 +68,7 @@ export default function CandidateUpload() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ resumeId, storageUrl: storagePath }),
       });
-      if (!parseRes.ok) throw new Error((await parseRes.json()).error || "Parsing failed");
+      if (!parseRes.ok) throw new Error(await readError(parseRes, "Parsing failed"));
       const { parsedData: data } = await parseRes.json();
 
       setParsedData(data);

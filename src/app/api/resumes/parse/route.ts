@@ -16,76 +16,84 @@ function getBaseUrl(request: NextRequest): string {
 // Body: { resumeId: string, storageUrl: string }
 // Parses the PDF via Firebase Storage SDK, saves parsedData, then fans out scoring.
 export async function POST(request: NextRequest) {
-  const auth = await verifyAuth(request, "candidate");
-  if (!auth) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { resumeId, storageUrl } = await request.json();
-
-  if (!resumeId || !storageUrl) {
-    return NextResponse.json({ error: "resumeId and storageUrl are required" }, { status: 400 });
-  }
-
-  // Verify resume belongs to this candidate
-  const resumeRef = adminDb.collection("resumes").doc(resumeId);
-  const resumeDoc = await resumeRef.get();
-  if (!resumeDoc.exists || (resumeDoc.data() as Resume).candidateId !== auth.uid) {
-    return NextResponse.json({ error: "Resume not found" }, { status: 404 });
-  }
-
-  // Download PDF from Firebase Storage using Admin SDK (storageUrl is the storage file path)
-  const bucket = getStorage(adminApp).bucket();
-  const file = bucket.file(storageUrl);
-  const [buffer] = await file.download();
-
-  // Extract text and check it's non-empty
-  const pdfParse = await import("pdf-parse");
-  const parseFn = (pdfParse as unknown as { default: (b: Buffer) => Promise<{ text: string }> }).default
-    ?? (pdfParse as unknown as (b: Buffer) => Promise<{ text: string }>);
-  const pdfData = await parseFn(buffer);
-
-  if (!pdfData.text.trim()) {
-    return NextResponse.json({ error: "Could not extract text from PDF" }, { status: 422 });
-  }
-
-  // Parse with Claude
-  let parsedData;
   try {
-    parsedData = await parseResume(pdfData.text);
+    const auth = await verifyAuth(request, "candidate");
+    if (!auth) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { resumeId, storageUrl } = await request.json();
+
+    if (!resumeId || !storageUrl) {
+      return NextResponse.json({ error: "resumeId and storageUrl are required" }, { status: 400 });
+    }
+
+    // Verify resume belongs to this candidate
+    const resumeRef = adminDb.collection("resumes").doc(resumeId);
+    const resumeDoc = await resumeRef.get();
+    if (!resumeDoc.exists || (resumeDoc.data() as Resume).candidateId !== auth.uid) {
+      return NextResponse.json({ error: "Resume not found" }, { status: 404 });
+    }
+
+    // Download PDF from Firebase Storage using Admin SDK (storageUrl is the storage file path)
+    const bucket = getStorage(adminApp).bucket();
+    const file = bucket.file(storageUrl);
+    const [buffer] = await file.download();
+
+    // Extract text and check it's non-empty
+    const pdfParse = await import("pdf-parse");
+    const parseFn = (pdfParse as unknown as { default: (b: Buffer) => Promise<{ text: string }> }).default
+      ?? (pdfParse as unknown as (b: Buffer) => Promise<{ text: string }>);
+    const pdfData = await parseFn(buffer);
+
+    if (!pdfData.text.trim()) {
+      return NextResponse.json({ error: "Could not extract text from PDF" }, { status: 422 });
+    }
+
+    // Parse with Claude
+    let parsedData;
+    try {
+      parsedData = await parseResume(pdfData.text);
+    } catch (err) {
+      console.error("[resumes/parse] Claude parse failed:", err);
+      return NextResponse.json({ error: "Resume parsing failed" }, { status: 502 });
+    }
+
+    // Save parsedData to Firestore
+    await resumeRef.update({ parsedData });
+
+    // P5: Fan-out — score this resume against every open job (fire-and-forget)
+    const baseUrl = getBaseUrl(request);
+    const candidateId = auth.uid;
+
+    after(async () => {
+      const openJobsSnap = await adminDb
+        .collection("jobs")
+        .where("status", "==", "open")
+        .get();
+
+      const openJobs = openJobsSnap.docs.map((d) => d.data() as Job);
+
+      await Promise.allSettled(
+        openJobs.map(async (job) => {
+          const appId = await ensureApplication(candidateId, job.id, resumeId);
+          return fetch(`${baseUrl}/api/score`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ resumeId, jobId: job.id, appId }),
+          });
+        })
+      );
+    });
+
+    return NextResponse.json({ resumeId, parsedData });
   } catch (err) {
-    console.error("[resumes/parse] Claude parse failed:", err);
-    return NextResponse.json({ error: "Resume parsing failed" }, { status: 502 });
-  }
-
-  // Save parsedData to Firestore
-  await resumeRef.update({ parsedData });
-
-  // P5: Fan-out — score this resume against every open job (fire-and-forget)
-  const baseUrl = getBaseUrl(request);
-  const candidateId = auth.uid;
-
-  after(async () => {
-    const openJobsSnap = await adminDb
-      .collection("jobs")
-      .where("status", "==", "open")
-      .get();
-
-    const openJobs = openJobsSnap.docs.map((d) => d.data() as Job);
-
-    await Promise.allSettled(
-      openJobs.map(async (job) => {
-        const appId = await ensureApplication(candidateId, job.id, resumeId);
-        return fetch(`${baseUrl}/api/score`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ resumeId, jobId: job.id, appId }),
-        });
-      })
+    console.error("[resumes/parse]", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Parse failed" },
+      { status: 500 }
     );
-  });
-
-  return NextResponse.json({ resumeId, parsedData });
+  }
 }
 
 // Creates the application document if it doesn't already exist.
