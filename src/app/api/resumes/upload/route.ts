@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getStorage } from "firebase-admin/storage";
 import { verifyAuth } from "@/lib/auth-helpers";
-import adminApp, { adminDb } from "@/lib/firebase-admin";
+import { adminDb, getAdminStorage } from "@/lib/firebase-admin";
 
 const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
 
@@ -45,7 +44,7 @@ export async function POST(request: NextRequest) {
     await batch.commit();
 
     // Generate signed upload URL
-    const bucket = getStorage(adminApp).bucket();
+    const bucket = getAdminStorage();
     const file = bucket.file(storagePath);
     const [signedUrl] = await file.getSignedUrl({
       version: "v4",

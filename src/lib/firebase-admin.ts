@@ -1,6 +1,7 @@
 import { initializeApp, getApps, cert, App } from "firebase-admin/app";
 import { getAuth, Auth } from "firebase-admin/auth";
 import { getFirestore, Firestore } from "firebase-admin/firestore";
+import { getStorage, Storage } from "firebase-admin/storage";
 
 function getAdminApp(): App {
   if (getApps().length > 0) {
@@ -30,4 +31,14 @@ const adminApp: App = getAdminApp();
 
 export const adminAuth: Auth = getAuth(adminApp);
 export const adminDb: Firestore = getFirestore(adminApp);
+
+const STORAGE_BUCKET = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? "";
+
+export function getAdminStorage(): ReturnType<Storage["bucket"]> {
+  if (!STORAGE_BUCKET) {
+    throw new Error("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET env var is not set");
+  }
+  return getStorage(adminApp).bucket(STORAGE_BUCKET);
+}
+
 export default adminApp;

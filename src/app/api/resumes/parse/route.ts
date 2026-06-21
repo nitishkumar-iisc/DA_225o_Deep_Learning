@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
-import { getStorage } from "firebase-admin/storage";
-import adminApp, { adminDb } from "@/lib/firebase-admin";
+import { adminDb, getAdminStorage } from "@/lib/firebase-admin";
 import { verifyAuth } from "@/lib/auth-helpers";
 import { parseResume } from "@/lib/anthropic";
 import { Application, Job, Resume } from "@/types";
@@ -36,7 +35,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Download PDF from Firebase Storage using Admin SDK (storageUrl is the storage file path)
-    const bucket = getStorage(adminApp).bucket();
+    const bucket = getAdminStorage();
     const file = bucket.file(storageUrl);
     const [buffer] = await file.download();
 
