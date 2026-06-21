@@ -12,9 +12,19 @@ export default function RecruiterSettings() {
 
   useEffect(() => {
     if (!user) return;
-    // TODO: check user.googleTokens from Firestore after P6 wires calendar OAuth
-    // For now, stub as disconnected
-    setCalendarStatus("disconnected");
+    fetch("/api/calendar/status")
+      .then((r) => r.json())
+      .then((data: { connected: boolean }) =>
+        setCalendarStatus(data.connected ? "connected" : "disconnected")
+      )
+      .catch(() => setCalendarStatus("disconnected"));
+
+    // Show success banner if redirected back from OAuth callback
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("calendar_connected") === "1") {
+      setCalendarStatus("connected");
+      window.history.replaceState({}, "", "/recruiter/settings");
+    }
   }, [user]);
 
   function connectCalendar() {
