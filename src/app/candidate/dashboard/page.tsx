@@ -182,20 +182,13 @@ export default function CandidateDashboard() {
   );
 }
 
-/* ── Applied card: shows fit score + status ── */
+/* ── Applied card: no score shown — Recommended badge if fit ≥ 60 ── */
 function AppliedCard({ item }: { item: JobWithApplication }) {
   const app = item.application!;
   const score = app.fitScore;
   const scored = score > 0;
   const decision = app.decision;
-
-  const scoreColor = !scored
-    ? "bg-gray-100 text-gray-400"
-    : score >= 70
-    ? "bg-emerald-100 text-emerald-700"
-    : score >= 40
-    ? "bg-amber-100 text-amber-700"
-    : "bg-red-100 text-red-700";
+  const recommended = scored && score >= 60;
 
   const statusLabel = decision === "approved"
     ? { label: "Approved", cls: "bg-emerald-100 text-emerald-700" }
@@ -206,23 +199,24 @@ function AppliedCard({ item }: { item: JobWithApplication }) {
     : { label: "Scoring…", cls: "bg-gray-100 text-gray-500" };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5 flex items-start gap-4 shadow-sm">
-      {/* Score */}
-      <div className={`flex-shrink-0 w-14 h-14 rounded-xl flex flex-col items-center justify-center ${scoreColor}`}>
-        {scored ? (
-          <>
-            <span className="text-xl font-bold leading-none">{score}</span>
-            <span className="text-[10px] font-medium mt-0.5">fit</span>
-          </>
-        ) : (
-          <span className="text-[10px] font-medium text-center px-1 leading-tight">Scoring…</span>
-        )}
+    <div className={`bg-white border rounded-xl p-5 flex items-start gap-4 shadow-sm ${recommended ? "border-emerald-300" : "border-gray-200"}`}>
+      {/* Job icon */}
+      <div className={`flex-shrink-0 w-14 h-14 rounded-xl flex items-center justify-center ${recommended ? "bg-emerald-50" : "bg-gray-50"}`}>
+        <svg className={`w-6 h-6 ${recommended ? "text-emerald-500" : "text-gray-400"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+            d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
       </div>
 
       {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <h3 className="text-base font-semibold text-gray-900 truncate">{item.title}</h3>
+          {recommended && (
+            <span className="text-xs font-semibold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+              ★ Recommended
+            </span>
+          )}
           <span className="text-xs text-gray-400 font-mono">{item.positionId}</span>
           {item.department && (
             <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{item.department}</span>
