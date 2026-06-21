@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { ResumeUploader } from "@/components/resume-uploader";
 import { ParsedResumePreview } from "@/components/parsed-resume-preview";
@@ -10,6 +11,7 @@ type Status = "idle" | "uploading" | "parsing" | "done" | "error";
 
 export default function CandidateUpload() {
   const { user } = useAuth();
+  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<Status>("idle");
   const [progress, setProgress] = useState(0);
@@ -57,6 +59,9 @@ export default function CandidateUpload() {
       setProgress(100);
       setParsedData(data);
       setStatus("done");
+
+      // Redirect to dashboard after a brief moment so the user sees success
+      setTimeout(() => router.push("/candidate/dashboard"), 1200);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
       setStatus("error");
