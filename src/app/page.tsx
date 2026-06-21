@@ -18,7 +18,7 @@ export default function Home() {
             <Link href="/login" className="text-sm text-gray-600 hover:text-gray-900 font-medium px-4 py-2 rounded-lg hover:bg-gray-100 transition-colors">
               Sign in
             </Link>
-            <Link href="/register" className="text-sm bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm">
+            <Link href="/login?tab=signup" className="text-sm bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm">
               Get started free
             </Link>
           </div>
@@ -48,10 +48,10 @@ export default function Home() {
               BestHire uses AI to match candidates to the right roles — scoring resumes, surfacing top talent, and scheduling interviews automatically.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 mb-12">
-              <Link href="/register?role=candidate" className="inline-flex items-center gap-2 px-7 py-3.5 bg-white text-slate-900 font-bold rounded-xl hover:bg-blue-50 transition-colors shadow-lg text-sm">
+              <Link href="/login?tab=signup" className="inline-flex items-center gap-2 px-7 py-3.5 bg-white text-slate-900 font-bold rounded-xl hover:bg-blue-50 transition-colors shadow-lg text-sm">
                 Find your next role <ArrowRight size={16} />
               </Link>
-              <Link href="/register?role=recruiter" className="inline-flex items-center gap-2 px-7 py-3.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 transition-colors shadow-lg border border-blue-400/30 text-sm">
+              <Link href="/login?tab=signup" className="inline-flex items-center gap-2 px-7 py-3.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 transition-colors shadow-lg border border-blue-400/30 text-sm">
                 Start hiring today <ArrowRight size={16} />
               </Link>
             </div>
@@ -280,7 +280,7 @@ export default function Home() {
                 </li>
               ))}
             </ul>
-            <Link href="/register?role=candidate" className="inline-flex items-center gap-2 bg-blue-600 text-white font-semibold px-5 py-2.5 rounded-xl text-sm hover:bg-blue-700 transition-colors">
+            <Link href="/login?tab=signup" className="inline-flex items-center gap-2 bg-blue-600 text-white font-semibold px-5 py-2.5 rounded-xl text-sm hover:bg-blue-700 transition-colors">
               Join as Candidate <ArrowRight size={15} />
             </Link>
           </div>
@@ -298,7 +298,7 @@ export default function Home() {
                 </li>
               ))}
             </ul>
-            <Link href="/register?role=recruiter" className="inline-flex items-center gap-2 bg-white text-indigo-700 font-semibold px-5 py-2.5 rounded-xl text-sm hover:bg-indigo-50 transition-colors">
+            <Link href="/login?tab=signup" className="inline-flex items-center gap-2 bg-white text-indigo-700 font-semibold px-5 py-2.5 rounded-xl text-sm hover:bg-indigo-50 transition-colors">
               Start Hiring <ArrowRight size={15} />
             </Link>
           </div>
@@ -323,7 +323,7 @@ export default function Home() {
           <h2 className="text-4xl font-bold text-white mb-4">Ready to transform your hiring?</h2>
           <p className="text-slate-300 mb-8">Join BestHire and let AI do the heavy lifting.</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/register" className="px-8 py-3.5 bg-white text-slate-900 font-bold rounded-xl hover:bg-blue-50 transition-colors text-sm">
+            <Link href="/login?tab=signup" className="px-8 py-3.5 bg-white text-slate-900 font-bold rounded-xl hover:bg-blue-50 transition-colors text-sm">
               Create free account
             </Link>
             <Link href="/login" className="px-8 py-3.5 border border-white/20 text-white font-semibold rounded-xl hover:bg-white/10 transition-colors text-sm">
