@@ -39,11 +39,10 @@ export async function POST(request: NextRequest) {
     const file = bucket.file(storageUrl);
     const [buffer] = await file.download();
 
-    // Extract text and check it's non-empty
-    const pdfParse = await import("pdf-parse");
-    const parseFn = (pdfParse as unknown as { default: (b: Buffer) => Promise<{ text: string }> }).default
-      ?? (pdfParse as unknown as (b: Buffer) => Promise<{ text: string }>);
-    const pdfData = await parseFn(buffer);
+    // Extract text — pdf-parse is CJS; require() avoids dynamic import interop issues
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require("pdf-parse") as (b: Buffer) => Promise<{ text: string }>;
+    const pdfData = await pdfParse(buffer);
 
     if (!pdfData.text.trim()) {
       return NextResponse.json({ error: "Could not extract text from PDF" }, { status: 422 });

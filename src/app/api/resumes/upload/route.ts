@@ -38,12 +38,10 @@ export async function POST(request: NextRequest) {
     // Read file buffer once — reuse for both pdf-parse and Storage upload
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    // Extract text from PDF
-    const pdfParse = await import("pdf-parse");
-    const parseFn = (
-      pdfParse as unknown as { default: (b: Buffer) => Promise<{ text: string }> }
-    ).default ?? (pdfParse as unknown as (b: Buffer) => Promise<{ text: string }>);
-    const pdfData = await parseFn(buffer);
+    // Extract text from PDF — pdf-parse is CJS; require() is more reliable than dynamic import interop
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require("pdf-parse") as (b: Buffer) => Promise<{ text: string }>;
+    const pdfData = await pdfParse(buffer);
 
     if (!pdfData.text.trim()) {
       return NextResponse.json({ error: "Could not extract text from PDF" }, { status: 422 });
