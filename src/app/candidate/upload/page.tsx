@@ -35,34 +35,27 @@ export default function CandidateUpload() {
   async function upload() {
     if (!file) return;
     setStatus("uploading");
-    setProgress(0);
+    setProgress(10);
     setError("");
 
     try {
       const token = (await user?.getIdToken()) || "";
 
+      // Send file directly to our API — server uploads to Firebase Storage (avoids CORS)
+      const formData = new FormData();
+      formData.append("file", file);
+
       const res = await fetch("/api/resumes/upload", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ fileName: file.name, contentType: file.type, fileSize: file.size }),
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
       });
-      if (!res.ok) throw new Error(await readError(res, "Upload request failed"));
-      const { uploadUrl, resumeId, storagePath } = await res.json();
-
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("PUT", uploadUrl);
-        xhr.setRequestHeader("Content-Type", "application/pdf");
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
-        };
-        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error("Upload failed")));
-        xhr.onerror = () => reject(new Error("Upload failed"));
-        xhr.send(file);
-      });
+      if (!res.ok) throw new Error(await readError(res, "Upload failed"));
+      const { resumeId, storagePath } = await res.json();
 
       setStatus("parsing");
-      setProgress(100);
+      setProgress(50);
+
       const parseRes = await fetch("/api/resumes/parse", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -71,6 +64,7 @@ export default function CandidateUpload() {
       if (!parseRes.ok) throw new Error(await readError(parseRes, "Parsing failed"));
       const { parsedData: data } = await parseRes.json();
 
+      setProgress(100);
       setParsedData(data);
       setStatus("done");
     } catch (e) {

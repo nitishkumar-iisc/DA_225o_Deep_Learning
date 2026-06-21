@@ -4,18 +4,24 @@ import { adminDb, getAdminStorage } from "@/lib/firebase-admin";
 
 const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
 
+// POST /api/resumes/upload
+// Accepts multipart/form-data with a "file" field (PDF).
+// Uploads directly to Firebase Storage server-side — avoids CORS on signed URLs.
 export async function POST(request: NextRequest) {
   try {
     const auth = await verifyAuth(request, "candidate");
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { contentType, fileSize } = await request.json();
+    const formData = await request.formData();
+    const file = formData.get("file") as File | null;
 
-    if (contentType !== "application/pdf") {
+    if (!file) {
+      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+    }
+    if (file.type !== "application/pdf") {
       return NextResponse.json({ error: "Only PDF files are accepted" }, { status: 400 });
     }
-
-    if (!fileSize || fileSize > MAX_SIZE) {
+    if (file.size > MAX_SIZE) {
       return NextResponse.json({ error: "File must be ≤ 5 MB" }, { status: 413 });
     }
 
@@ -29,7 +35,6 @@ export async function POST(request: NextRequest) {
     const batch = adminDb.batch();
     activeResumes.docs.forEach((doc) => batch.update(doc.ref, { active: false }));
 
-    // Create new resume document
     const resumeDoc = resumesRef.doc();
     const storagePath = `resumes/${auth.uid}/${Date.now()}.pdf`;
 
@@ -43,21 +48,16 @@ export async function POST(request: NextRequest) {
 
     await batch.commit();
 
-    // Generate signed upload URL
-    const bucket = getAdminStorage();
-    const file = bucket.file(storagePath);
-    const [signedUrl] = await file.getSignedUrl({
-      version: "v4",
-      action: "write",
-      expires: Date.now() + 15 * 60 * 1000, // 15 minutes
-      contentType: "application/pdf",
-    });
+    // Upload to Firebase Storage server-side (no CORS issues)
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const storageFile = getAdminStorage().file(storagePath);
+    await storageFile.save(buffer, { contentType: "application/pdf" });
 
-    return NextResponse.json({ uploadUrl: signedUrl, resumeId: resumeDoc.id, storagePath });
+    return NextResponse.json({ resumeId: resumeDoc.id, storagePath });
   } catch (err) {
     console.error("[resumes/upload]", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Upload setup failed" },
+      { error: err instanceof Error ? err.message : "Upload failed" },
       { status: 500 }
     );
   }
