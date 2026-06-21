@@ -188,7 +188,7 @@ function AuthForm() {
                     : "text-gray-500 hover:text-gray-700"
                 }`}
               >
-                {t === "signin" ? "Sign in" : "Get started free"}
+                {t === "signin" ? "Sign in" : "Get started"}
               </button>
             ))}
           </div>

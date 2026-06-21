@@ -19,7 +19,7 @@ export default function Home() {
               Sign in
             </Link>
             <Link href="/login?tab=signup" className="text-sm bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm">
-              Get started free
+              Get started
             </Link>
           </div>
         </div>
