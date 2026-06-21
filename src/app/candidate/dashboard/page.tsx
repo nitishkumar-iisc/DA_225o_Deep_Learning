@@ -160,7 +160,7 @@ export default function CandidateDashboard() {
       </div>
 
       {/* ── Content ── */}
-      <div className="max-w-4xl mx-auto px-6 -mt-10 pb-16 space-y-8">
+      <div className="relative z-10 max-w-4xl mx-auto px-6 -mt-10 pb-16 space-y-8">
 
         {applyError && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl shadow-sm">

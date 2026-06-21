@@ -115,7 +115,7 @@ export default function RecruiterDashboard() {
       </div>
 
       {/* ── Content ── */}
-      <div className="max-w-5xl mx-auto px-6 -mt-10 pb-16 space-y-8">
+      <div className="relative z-10 max-w-5xl mx-auto px-6 -mt-10 pb-16 space-y-8">
 
         {/* Stat cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
