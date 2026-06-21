@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { after } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { verifyAuth } from "@/lib/auth-helpers";
-import { Application, Job, JobEducationLevel, JobStatus, Resume } from "@/types";
+import { Application, Job, JobEducationLevel, JobStatus } from "@/types";
 
-function getBaseUrl(request: NextRequest): string {
-  const proto = request.headers.get("x-forwarded-proto") ?? "http";
-  const host = request.headers.get("host") ?? "localhost:3000";
-  return `${proto}://${host}`;
-}
 
 // Creates an application document for (candidateId, jobId) if it doesn't exist yet.
 // Deterministic ID prevents duplicates under concurrent requests (SPEC §10).
@@ -130,32 +124,8 @@ export async function POST(request: NextRequest) {
   const jobSnap = await jobRef.get();
   const job = jobSnap.data() as Job;
 
-  // P5: Fan-out — score all candidates with active resumes against this new job (fire-and-forget)
-  const baseUrl = getBaseUrl(request);
-  const jobId = job.id;
-
-  after(async () => {
-    const activeResumesSnap = await adminDb
-      .collection("resumes")
-      .where("active", "==", true)
-      .get();
-
-    // Include doc.id — resumes don't store their own id field in the document data
-    const activeResumes = activeResumesSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Resume));
-
-    await Promise.allSettled(
-      activeResumes
-        .filter((r) => r.parsedData !== null)
-        .map(async (resume) => {
-          const appId = await ensureApplication(resume.candidateId, jobId, resume.id);
-          return fetch(`${baseUrl}/api/score`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ resumeId: resume.id, jobId, appId }),
-          });
-        })
-    );
-  });
+  // No auto-fan-out: candidates choose which jobs to apply to via the Apply Now button.
+  // New jobs appear in "Open Positions" on the candidate dashboard until explicitly applied.
 
   return NextResponse.json({ job, positionId: job.positionId }, { status: 201 });
 }

@@ -3,20 +3,14 @@ import { after } from "next/server";
 import { adminDb, getAdminStorage } from "@/lib/firebase-admin";
 import { verifyAuth } from "@/lib/auth-helpers";
 import { parseResumeFromPDF } from "@/lib/anthropic";
-import { Application, Job } from "@/types";
 
 const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
 
-function getBaseUrl(request: NextRequest): string {
-  const proto = request.headers.get("x-forwarded-proto") ?? "http";
-  const host = request.headers.get("host") ?? "localhost:3000";
-  return `${proto}://${host}`;
-}
-
 // POST /api/resumes/upload
 // Accepts multipart/form-data with a "file" field (PDF).
-// Parses the resume in-memory — no Firebase Storage download needed.
-// Attempts to persist the raw PDF to Storage as a best-effort background step.
+// Parses the resume in-memory via Claude. Persists raw PDF to Storage as
+// a best-effort background step. No auto-apply fan-out — candidates choose
+// which jobs to apply to via the Apply Now button on the dashboard.
 export async function POST(request: NextRequest) {
   try {
     const auth = await verifyAuth(request, "candidate");
@@ -35,7 +29,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "File must be ≤ 5 MB" }, { status: 413 });
     }
 
-    // Read file buffer — reused for Claude parsing and background Storage save
     const buffer = Buffer.from(await file.arrayBuffer());
 
     // Parse with Claude directly from the PDF buffer (no PDF library needed)
@@ -70,39 +63,16 @@ export async function POST(request: NextRequest) {
 
     await batch.commit();
 
-    // Fan-out scoring + best-effort Storage save (fire-and-forget)
-    const baseUrl = getBaseUrl(request);
-    const candidateId = auth.uid;
-    const resumeId = resumeDoc.id;
-
+    // Best-effort Storage save in the background (non-blocking)
     after(async () => {
-      // Persist raw PDF to Storage if bucket is available
       try {
         await getAdminStorage().file(storagePath).save(buffer, { contentType: "application/pdf" });
       } catch (err) {
         console.warn("[resumes/upload] Storage save failed (non-fatal):", err);
       }
-
-      // Score against all open jobs
-      const openJobsSnap = await adminDb
-        .collection("jobs")
-        .where("status", "==", "open")
-        .get();
-
-      await Promise.allSettled(
-        openJobsSnap.docs.map(async (doc) => {
-          const job = doc.data() as Job;
-          const appId = await ensureApplication(candidateId, job.id, resumeId);
-          return fetch(`${baseUrl}/api/score`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ resumeId, jobId: job.id, appId }),
-          });
-        })
-      );
     });
 
-    return NextResponse.json({ resumeId, parsedData });
+    return NextResponse.json({ resumeId: resumeDoc.id, parsedData });
   } catch (err) {
     console.error("[resumes/upload]", err);
     return NextResponse.json(
@@ -110,48 +80,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-async function ensureApplication(
-  candidateId: string,
-  jobId: string,
-  resumeId: string
-): Promise<string> {
-  const appId = `${candidateId}::${jobId}`;
-  const appRef = adminDb.collection("applications").doc(appId);
-
-  await adminDb.runTransaction(async (tx) => {
-    const snap = await tx.get(appRef);
-    if (snap.exists) {
-      if ((snap.data() as Application).resumeId !== resumeId) {
-        tx.update(appRef, { resumeId, updatedAt: new Date().toISOString() });
-      }
-      return;
-    }
-    const now = new Date().toISOString();
-    tx.set(appRef, {
-      id: appId,
-      candidateId,
-      jobId,
-      resumeId,
-      fitScore: 0,
-      featureVector: {
-        keywordMatchScore: 0,
-        experienceMatchScore: 0,
-        educationScore: 0,
-        skillsOverlapScore: 0,
-        claudeRawScore: 0,
-      },
-      claudeReasoning: null,
-      status: "pending",
-      decision: null,
-      decidedAt: null,
-      scheduledAt: null,
-      calendarEventId: null,
-      createdAt: now,
-      updatedAt: now,
-    });
-  });
-
-  return appId;
 }
