@@ -140,7 +140,8 @@ export async function POST(request: NextRequest) {
       .where("active", "==", true)
       .get();
 
-    const activeResumes = activeResumesSnap.docs.map((d) => d.data() as Resume);
+    // Include doc.id — resumes don't store their own id field in the document data
+    const activeResumes = activeResumesSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Resume));
 
     await Promise.allSettled(
       activeResumes
