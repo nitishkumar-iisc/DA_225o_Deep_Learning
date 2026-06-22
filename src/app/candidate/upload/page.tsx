@@ -69,25 +69,49 @@ export default function CandidateUpload() {
   }
 
   return (
-    <div className="p-8 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900">Upload Resume</h1>
-      <p className="text-gray-500 mt-1 mb-6">Upload your resume as a PDF (max 5 MB)</p>
-
-      <ResumeUploader onFileSelected={onFileSelected} uploading={status === "uploading" || status === "parsing"} progress={progress} status={status} />
-
-      {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
-
-      {file && status !== "done" && status !== "uploading" && status !== "parsing" && (
-        <button onClick={upload} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-          Upload & Parse
-        </button>
-      )}
-
-      {parsedData && (
-        <div className="mt-6">
-          <ParsedResumePreview data={parsedData} />
+    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-blue-50 to-cyan-50 p-8">
+      <div className="max-w-2xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-gray-900">Upload Resume</h1>
+          <p className="text-gray-500 mt-1">
+            Supports <span className="font-medium text-gray-700">PDF, DOCX, DOC, and TXT</span> — Claude will extract and analyse your skills automatically.
+          </p>
         </div>
-      )}
+
+        <ResumeUploader
+          onFileSelected={onFileSelected}
+          uploading={status === "uploading" || status === "parsing"}
+          progress={progress}
+          status={status}
+        />
+
+        {error && (
+          <p className="text-red-600 text-sm mt-3 flex items-center gap-1">
+            <span>⚠️</span> {error}
+          </p>
+        )}
+
+        {file && status !== "done" && status !== "uploading" && status !== "parsing" && (
+          <button
+            onClick={upload}
+            className="mt-5 w-full py-3 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-semibold rounded-xl shadow-md hover:shadow-indigo-200 hover:shadow-lg transition-all duration-200 hover:scale-[1.01]"
+          >
+            Upload & Parse with AI
+          </button>
+        )}
+
+        {status === "done" && (
+          <div className="mt-4 flex items-center gap-2 text-emerald-600 font-medium text-sm">
+            <span>✓</span> Resume parsed successfully — redirecting to dashboard…
+          </div>
+        )}
+
+        {parsedData && (
+          <div className="mt-6">
+            <ParsedResumePreview data={parsedData} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

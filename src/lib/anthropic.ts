@@ -1,6 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { ParsedResume } from "@/types";
 
+// mammoth ships without TS declarations; require + inline type avoids the error.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const mammoth = require("mammoth") as {
+  extractRawText: (opts: { buffer: Buffer }) => Promise<{ value: string }>;
+};
+
 let _client: Anthropic | null = null;
 
 function getClient(): Anthropic {
@@ -81,6 +87,20 @@ export async function parseResumeFromPDF(buffer: Buffer): Promise<ParsedResume> 
 
   const json = first.text.replace(/```json\n?|```\n?/g, "").trim();
   return normalizeResume(JSON.parse(json));
+}
+
+// Parse a DOCX or DOC resume buffer — mammoth extracts plain text, Claude parses it.
+export async function parseResumeFromDocx(buffer: Buffer): Promise<ParsedResume> {
+  const { value: text } = await mammoth.extractRawText({ buffer });
+  if (!text.trim()) throw new Error("Could not extract text from document");
+  return parseResume(text);
+}
+
+// Parse a plain-text resume (TXT files).
+export async function parseResumeFromText(buffer: Buffer): Promise<ParsedResume> {
+  const text = buffer.toString("utf-8");
+  if (!text.trim()) throw new Error("Document appears to be empty");
+  return parseResume(text);
 }
 
 // Parse a resume from extracted plain text (used when text is already available).

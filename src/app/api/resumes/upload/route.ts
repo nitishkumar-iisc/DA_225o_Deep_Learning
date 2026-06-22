@@ -2,15 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
 import { adminDb, getAdminStorage } from "@/lib/firebase-admin";
 import { verifyAuth } from "@/lib/auth-helpers";
-import { parseResumeFromPDF } from "@/lib/anthropic";
+import { parseResumeFromPDF, parseResumeFromDocx, parseResumeFromText } from "@/lib/anthropic";
 
 const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
 
+const ACCEPTED_TYPES: Record<string, { ext: string; label: string }> = {
+  "application/pdf": { ext: "pdf", label: "PDF" },
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": { ext: "docx", label: "DOCX" },
+  "application/msword": { ext: "doc", label: "DOC" },
+  "text/plain": { ext: "txt", label: "TXT" },
+};
+
 // POST /api/resumes/upload
-// Accepts multipart/form-data with a "file" field (PDF).
-// Parses the resume in-memory via Claude. Persists raw PDF to Storage as
-// a best-effort background step. No auto-apply fan-out — candidates choose
-// which jobs to apply to via the Apply Now button on the dashboard.
+// Accepts multipart/form-data with a "file" field (PDF, DOCX, DOC, TXT ≤ 5 MB).
+// PDF  → Claude native document API (best quality)
+// DOCX/DOC → mammoth text extraction → Claude text API
+// TXT  → Claude text API directly
 export async function POST(request: NextRequest) {
   try {
     const auth = await verifyAuth(request, "candidate");
@@ -22,21 +29,36 @@ export async function POST(request: NextRequest) {
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
-    if (file.type !== "application/pdf") {
-      return NextResponse.json({ error: "Only PDF files are accepted" }, { status: 400 });
+
+    const fileType = ACCEPTED_TYPES[file.type];
+    if (!fileType) {
+      return NextResponse.json(
+        { error: "Unsupported file type. Please upload a PDF, DOCX, DOC, or TXT file." },
+        { status: 415 }
+      );
     }
+
     if (file.size > MAX_SIZE) {
       return NextResponse.json({ error: "File must be ≤ 5 MB" }, { status: 413 });
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    // Parse with Claude directly from the PDF buffer (no PDF library needed)
+    // Route to the correct parser based on file type
     let parsedData;
     try {
-      parsedData = await parseResumeFromPDF(buffer);
+      if (file.type === "application/pdf") {
+        parsedData = await parseResumeFromPDF(buffer);
+      } else if (
+        file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+        file.type === "application/msword"
+      ) {
+        parsedData = await parseResumeFromDocx(buffer);
+      } else {
+        parsedData = await parseResumeFromText(buffer);
+      }
     } catch (err) {
-      console.error("[resumes/upload] Claude parse failed:", err);
+      console.error("[resumes/upload] parse failed:", err);
       return NextResponse.json({ error: "Resume parsing failed" }, { status: 502 });
     }
 
@@ -51,7 +73,7 @@ export async function POST(request: NextRequest) {
     activeResumes.docs.forEach((doc) => batch.update(doc.ref, { active: false }));
 
     const resumeDoc = resumesRef.doc();
-    const storagePath = `resumes/${auth.uid}/${Date.now()}.pdf`;
+    const storagePath = `resumes/${auth.uid}/${Date.now()}.${fileType.ext}`;
 
     batch.set(resumeDoc, {
       candidateId: auth.uid,
@@ -66,7 +88,7 @@ export async function POST(request: NextRequest) {
     // Best-effort Storage save in the background (non-blocking)
     after(async () => {
       try {
-        await getAdminStorage().file(storagePath).save(buffer, { contentType: "application/pdf" });
+        await getAdminStorage().file(storagePath).save(buffer, { contentType: file.type });
       } catch (err) {
         console.warn("[resumes/upload] Storage save failed (non-fatal):", err);
       }
