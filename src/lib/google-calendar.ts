@@ -94,30 +94,39 @@ export async function createInterviewEvent({
   recruiterEmail,
   job,
   claudeReasoning,
+  preferredDateTime,
 }: {
   recruiterTokens: GoogleTokens;
   candidateEmail: string;
   recruiterEmail: string;
   job: { title: string; positionId: string };
   claudeReasoning: string | null;
+  preferredDateTime?: string; // ISO string; skips auto-find if provided
 }): Promise<{ eventId: string; startTime: string }> {
   const auth = getOAuthClient(recruiterTokens);
   const calendar = google.calendar({ version: "v3", auth });
 
-  // Fetch busy slots over the next 14 days to find a free slot
-  const now = new Date();
-  const twoWeeksOut = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+  let startTime: Date;
 
-  const freeBusy = await calendar.freebusy.query({
-    requestBody: {
-      timeMin: now.toISOString(),
-      timeMax: twoWeeksOut.toISOString(),
-      items: [{ id: "primary" }],
-    },
-  });
+  if (preferredDateTime) {
+    startTime = new Date(preferredDateTime);
+  } else {
+    // Fetch busy slots over the next 14 days to find a free slot
+    const now = new Date();
+    const twoWeeksOut = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-  const busyPeriods = freeBusy.data.calendars?.primary?.busy ?? [];
-  const startTime = findNextSlot(busyPeriods);
+    const freeBusy = await calendar.freebusy.query({
+      requestBody: {
+        timeMin: now.toISOString(),
+        timeMax: twoWeeksOut.toISOString(),
+        items: [{ id: "primary" }],
+      },
+    });
+
+    const busyPeriods = freeBusy.data.calendars?.primary?.busy ?? [];
+    startTime = findNextSlot(busyPeriods);
+  }
+
   const endTime = new Date(startTime.getTime() + INTERVIEW_DURATION_MS);
 
   const event = await calendar.events.insert({

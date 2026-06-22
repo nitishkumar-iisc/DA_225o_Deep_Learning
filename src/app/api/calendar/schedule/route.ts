@@ -11,7 +11,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { applicationId } = await request.json() as { applicationId: string };
+  const body = await request.json() as { applicationId: string; preferredDateTime?: string };
+  const { applicationId, preferredDateTime } = body;
   if (!applicationId) {
     return NextResponse.json({ error: "applicationId is required" }, { status: 400 });
   }
@@ -53,6 +54,7 @@ export async function POST(request: NextRequest) {
     recruiterEmail: recruiter.email,
     job: { title: job.title, positionId: job.positionId },
     claudeReasoning: application.claudeReasoning,
+    preferredDateTime,
   });
 
   // Update application (SPEC §8.2)
@@ -103,8 +105,9 @@ export async function DELETE(request: NextRequest) {
 
   await cancelEvent(recruiter.googleTokens as GoogleTokens, application.calendarEventId);
 
-  // Clear calendar fields; status reverts to "approved" (undo caller will reset to "pending")
+  // Clear calendar fields and revert status to "approved"
   await appSnap.ref.update({
+    status: "approved",
     scheduledAt: null,
     calendarEventId: null,
     updatedAt: new Date().toISOString(),

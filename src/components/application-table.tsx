@@ -88,12 +88,27 @@ export function ApplicationTable({ rows }: Props) {
                 {new Date(application.createdAt).toLocaleDateString()}
               </td>
               <td className="px-4 py-3">
-                <Link
-                  href={`/recruiter/applications/${application.id}`}
-                  className="text-blue-600 hover:underline text-xs font-medium"
-                >
-                  Review →
-                </Link>
+                <div className="flex items-center gap-3">
+                  <Link
+                    href={`/recruiter/applications/${application.id}`}
+                    className="text-blue-600 hover:underline text-xs font-medium"
+                  >
+                    Review →
+                  </Link>
+                  {application.status === "approved" && (
+                    <Link
+                      href={`/recruiter/applications/${application.id}#schedule`}
+                      className="text-xs font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                    >
+                      📅 Schedule
+                    </Link>
+                  )}
+                  {application.status === "interview_scheduled" && application.scheduledAt && (
+                    <span className="text-xs text-emerald-600 font-medium">
+                      {new Date(application.scheduledAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                    </span>
+                  )}
+                </div>
               </td>
             </tr>
           ))}
