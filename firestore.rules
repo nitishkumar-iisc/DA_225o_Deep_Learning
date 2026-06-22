@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    function isRecruiter() {
+      return request.auth.token.role == "recruiter";
+    }
+
+    function isCandidate() {
+      return request.auth.token.role == "candidate";
+    }
+
+    // Users: each user reads/writes their own profile only
+    match /users/{uid} {
+      allow read, write: if isSignedIn() && isOwner(uid);
+    }
+
+    // Jobs: recruiters manage their own jobs; candidates can read open jobs
+    match /jobs/{jobId} {
+      allow read: if isSignedIn();
+      allow create: if isRecruiter();
+      allow update, delete: if isRecruiter()
+        && resource.data.recruiterId == request.auth.uid;
+    }
+
+    // Resumes: candidates read/write their own resumes; recruiters read all
+    match /resumes/{resumeId} {
+      allow read: if isSignedIn()
+        && (isRecruiter() || isOwner(resource.data.candidateId));
+      allow create, update: if isCandidate()
+        && isOwner(request.resource.data.candidateId);
+    }
+
+    // Applications: candidates read their own; recruiters read/write applications on their jobs
+    match /applications/{appId} {
+      allow read: if isSignedIn()
+        && (isOwner(resource.data.candidateId) || isRecruiter());
+      allow create: if isSignedIn();
+      allow update: if isRecruiter();
+    }
+
+    // ML models: recruiters read/write models for their own jobs
+    match /mlModels/{jobId} {
+      allow read, write: if isRecruiter();
+    }
+
+    // Position ID counters (server-side only via Admin SDK — deny client access)
+    match /counters/{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
