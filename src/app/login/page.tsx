@@ -165,7 +165,7 @@ function AuthForm() {
       </div>
 
       {/* ── Right form panel ── */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-6 py-12 bg-gray-50">
+      <div className="w-full lg:w-1/2 flex items-center justify-center px-6 py-12 bg-gray-50 text-gray-900">
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="flex items-center gap-2 mb-8 lg:hidden">
